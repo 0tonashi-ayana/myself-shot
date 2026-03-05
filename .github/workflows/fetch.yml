@@ -46,7 +46,7 @@ jobs:
         run: |
           set -e
           rm -rf raw_repo
-          git clone https://x-access-token:${RAW_REPO_TOKEN}@github.com/<YOUR_GH_USERNAME>/fitbit-raw.git raw_repo
+          git clone https://x-access-token:${RAW_REPO_TOKEN}@github.com/0tonashi-ayana/fitbit-raw.git raw_repo
           mkdir -p raw_repo/sleep_raw
           cp -r out_raw/*.sleep.json raw_repo/sleep_raw/ || true
           cd raw_repo
