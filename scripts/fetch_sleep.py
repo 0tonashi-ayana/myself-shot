@@ -63,6 +63,12 @@ def write_docs(summary: dict):
     with open("docs/latest.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
+def write_raw(date_str: str, payload: dict):
+    os.makedirs("out_raw", exist_ok=True)
+    path = f"out_raw/{date_str}.sleep.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
     # minimal HTML that fetches latest.json
     html = f"""<!doctype html>
 <html>
@@ -110,19 +116,26 @@ def main():
     today = datetime.date.today()
     candidates = [today, today - datetime.timedelta(days=1)]
 
-    best = None
-    for d in candidates:
-        payload = get_sleep(access, d.isoformat())
-        s = pick_main_sleep(payload)
-        if s:
-            best = summarize(s)
-            break
+best = None
+best_payload = None
+best_date = None
 
-    if not best:
-        # still write something so you can see it ran
-        best = {"status": "no_main_sleep_found_yet", "checked": [c.isoformat() for c in candidates]}
+for d in candidates:
+    payload = get_sleep(access, d.isoformat())
+    s = pick_main_sleep(payload)
+    if s:
+        best = summarize(s)
+        best_payload = payload
+        best_date = d.isoformat()
+        break
 
+if not best:
+    best = {"status": "no_main_sleep_found_yet", "checked": [c.isoformat() for c in candidates]}
     write_docs(best)
+    return
+
+write_docs(best)
+write_raw(best_date, best_payload)
 
 if __name__ == "__main__":
     main()
