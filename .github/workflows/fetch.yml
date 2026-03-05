@@ -30,7 +30,23 @@ jobs:
           FITBIT_CLIENT_SECRET: ${{ secrets.FITBIT_CLIENT_SECRET }}
           FITBIT_REFRESH_TOKEN: ${{ secrets.FITBIT_REFRESH_TOKEN }}
         run: python scripts/fetch_sleep.py
-
+        
+      - name: Push raw to private repo
+        env:
+          RAW_REPO_TOKEN: ${{ secrets.RAW_REPO_TOKEN }}
+        run: |
+          set -e
+          rm -rf raw_repo
+          git clone https://x-access-token:${RAW_REPO_TOKEN}@github.com/<YOUR_GH_USERNAME>/fitbit-raw.git raw_repo
+          mkdir -p raw_repo/sleep_raw
+          cp -r out_raw/*.sleep.json raw_repo/sleep_raw/ || true
+          cd raw_repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sleep_raw/*.sleep.json || true
+          git diff --cached --quiet || git commit -m "Add sleep raw"
+          git push
+          
       - name: Commit changes (if any)
         run: |
           git config user.name "github-actions[bot]"
