@@ -17,10 +17,11 @@ fetch('./latest.json', {cache:'no-store'})
   .then(r => r.json())
   .then(j => {
     const box = document.getElementById('box');
+    const sessions = j.session_count ? ` (${j.session_count} sessions)` : '';
     box.innerHTML = `
       <p><b>Date</b>: ${j.dateOfSleep}</p>
       <p><b>Start–End</b>: ${j.startTime} → ${j.endTime}</p>
-      <p><b>Duration</b>: ${j.duration_min} min (efficiency ${j.efficiency})</p>
+      <p><b>Duration</b>: ${j.duration_min} min${sessions} (efficiency ${j.efficiency ?? 'N/A'})</p>
       <p><b>Stages (min)</b>: wake ${j.wake_min}, rem ${j.rem_min}, light ${j.light_min}, deep ${j.deep_min}</p>
       <h2>Raw</h2>
       <pre>${JSON.stringify(j, null, 2)}</pre>

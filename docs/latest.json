@@ -7,5 +7,6 @@
   "wake_min": 53,
   "light_min": 257,
   "deep_min": 103,
-  "rem_min": 50
+  "rem_min": 50,
+  "session_count": 1
 }
