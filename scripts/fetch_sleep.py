@@ -9,6 +9,7 @@ REFRESH_TOKEN = os.environ["FITBIT_REFRESH_TOKEN"]
 TOKEN_URL = "https://api.fitbit.com/oauth2/token"
 SLEEP_URL = "https://api.fitbit.com/1.2/user/-/sleep/date/{date}.json"
 
+
 def update_github_secret(secret_name, value):
     repo = os.environ["GITHUB_REPOSITORY"]
     token = os.environ["GH_SECRET_TOKEN"]
@@ -20,7 +21,6 @@ def update_github_secret(secret_name, value):
         "Accept": "application/vnd.github+json"
     }
 
-    # 先获取 public key
     key_resp = requests.get(
         f"https://api.github.com/repos/{repo}/actions/secrets/public-key",
         headers=headers,
@@ -50,6 +50,7 @@ def update_github_secret(secret_name, value):
     r = requests.put(url, headers=headers, json=payload, timeout=30)
     r.raise_for_status()
 
+
 def refresh_access_token():
     basic = base64.b64encode(
         f"{CLIENT_ID}:{CLIENT_SECRET}".encode()
@@ -70,12 +71,12 @@ def refresh_access_token():
 
     tok = r.json()
 
-    # 自动更新 refresh token
     new_refresh = tok.get("refresh_token")
     if new_refresh:
         update_github_secret("FITBIT_REFRESH_TOKEN", new_refresh)
 
     return tok
+
 
 def get_sleep(access_token: str, date_str: str):
     r = requests.get(
@@ -86,40 +87,66 @@ def get_sleep(access_token: str, date_str: str):
     r.raise_for_status()
     return r.json()
 
-def pick_main_sleep(payload: dict):
+
+def summarize_all_sleeps(payload: dict):
+    """汇总一天内所有 sleep sessions，不只是 main sleep"""
     sleeps = payload.get("sleep", [])
-    mains = [s for s in sleeps if s.get("isMainSleep")]
-    if mains:
-        # pick the longest main sleep (just in case)
-        return max(mains, key=lambda s: s.get("duration", 0))
-    return None
+    if not sleeps:
+        return None
 
-def minutes(x_ms: int) -> int:
-    return int(round(x_ms / 60000))
+    total_duration = 0
+    total_wake = 0
+    total_light = 0
+    total_deep = 0
+    total_rem = 0
 
-def summarize(s: dict):
-    levels = s.get("levels", {}).get("summary", {})
-    # Fitbit sometimes provides both "stages" and "classic" keys; we guard.
-    def lvl(name):
-        v = levels.get(name, {})
-        return int(v.get("minutes", 0))
+    # 按开始时间排序
+    sleeps_sorted = sorted(sleeps, key=lambda s: s.get("startTime", ""))
+    first_start = sleeps_sorted[0].get("startTime")
+    last_end = max(s.get("endTime", "") for s in sleeps)
+
+    # 计算加权平均 efficiency
+    total_efficiency_weighted = 0
+    total_duration_for_avg = 0
+
+    for s in sleeps:
+        dur = s.get("duration", 0)
+        total_duration += dur
+
+        eff = s.get("efficiency")
+        if eff is not None:
+            total_efficiency_weighted += eff * dur
+            total_duration_for_avg += dur
+
+        levels = s.get("levels", {}).get("summary", {})
+        total_wake += levels.get("wake", {}).get("minutes", 0)
+        total_light += levels.get("light", {}).get("minutes", 0)
+        total_deep += levels.get("deep", {}).get("minutes", 0)
+        total_rem += levels.get("rem", {}).get("minutes", 0)
+
+    avg_efficiency = None
+    if total_duration_for_avg > 0:
+        avg_efficiency = round(total_efficiency_weighted / total_duration_for_avg)
 
     return {
-        "dateOfSleep": s.get("dateOfSleep"),
-        "startTime": s.get("startTime"),
-        "endTime": s.get("endTime"),
-        "duration_min": minutes(int(s.get("duration", 0))),
-        "efficiency": s.get("efficiency"),
-        "wake_min": lvl("wake"),
-        "light_min": lvl("light"),
-        "deep_min": lvl("deep"),
-        "rem_min": lvl("rem"),
+        "dateOfSleep": sleeps_sorted[0].get("dateOfSleep"),
+        "startTime": first_start,
+        "endTime": last_end,
+        "duration_min": int(round(total_duration / 60000)),
+        "efficiency": avg_efficiency,
+        "wake_min": total_wake,
+        "light_min": total_light,
+        "deep_min": total_deep,
+        "rem_min": total_rem,
+        "session_count": len(sleeps),
     }
+
 
 def write_docs(summary: dict):
     os.makedirs("docs", exist_ok=True)
     with open("docs/latest.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
+
 
 def write_raw(date_str: str, payload: dict):
     os.makedirs("out_raw", exist_ok=True)
@@ -127,7 +154,6 @@ def write_raw(date_str: str, payload: dict):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    # minimal HTML that fetches latest.json
     html = f"""<!doctype html>
 <html>
 <head>
@@ -147,10 +173,11 @@ fetch('./latest.json', {{cache:'no-store'}})
   .then(r => r.json())
   .then(j => {{
     const box = document.getElementById('box');
+    const sessions = j.session_count ? ` (${{j.session_count}} sessions)` : '';
     box.innerHTML = `
       <p><b>Date</b>: ${{j.dateOfSleep}}</p>
       <p><b>Start–End</b>: ${{j.startTime}} → ${{j.endTime}}</p>
-      <p><b>Duration</b>: ${{j.duration_min}} min (efficiency ${{j.efficiency}})</p>
+      <p><b>Duration</b>: ${{j.duration_min}} min${{sessions}} (efficiency ${{j.efficiency ?? 'N/A'}})</p>
       <p><b>Stages (min)</b>: wake ${{j.wake_min}}, rem ${{j.rem_min}}, light ${{j.light_min}}, deep ${{j.deep_min}}</p>
       <h2>Raw</h2>
       <pre>${{JSON.stringify(j, null, 2)}}</pre>
@@ -166,6 +193,7 @@ fetch('./latest.json', {{cache:'no-store'}})
     with open("docs/index.html", "w", encoding="utf-8") as f:
         f.write(html)
 
+
 def main():
     tok = refresh_access_token()
     access = tok["access_token"]
@@ -173,27 +201,24 @@ def main():
     today = datetime.date.today()
     candidates = [today, today - datetime.timedelta(days=1)]
 
-    best = None
-    best_payload = None
-    best_date = None
-
     for d in candidates:
         payload = get_sleep(access, d.isoformat())
-        s = pick_main_sleep(payload)
-        if s:
-            best = summarize(s)
-            best_payload = payload
-            best_date = d.isoformat()
-            break
+        if payload.get("sleep"):
+            summary = summarize_all_sleeps(payload)
+            if summary:
+                write_docs(summary)
+                write_raw(d.isoformat(), payload)
+                print(f"Updated with {summary['session_count']} session(s) from {d.isoformat()}")
+                return
 
-    if not best:
-        best = {"status": "no_main_sleep_found_yet",
-                "checked": [c.isoformat() for c in candidates]}
-        write_docs(best)
-        return
+    # 没找到任何 sleep 数据
+    fallback = {
+        "status": "no_sleep_found",
+        "checked": [c.isoformat() for c in candidates]
+    }
+    write_docs(fallback)
+    print("No sleep data found")
 
-    write_docs(best)
-    write_raw(best_date, best_payload)
 
 if __name__ == "__main__":
     main()
