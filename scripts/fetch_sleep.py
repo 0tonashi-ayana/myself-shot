@@ -199,7 +199,7 @@ def main():
     access = tok["access_token"]
 
     today = datetime.date.today()
-    candidates = [today, today - datetime.timedelta(days=1)]
+    candidates = [today + datetime.timedelta(days=1), today, today - datetime.timedelta(days=1)]
 
     for d in candidates:
         payload = get_sleep(access, d.isoformat())
