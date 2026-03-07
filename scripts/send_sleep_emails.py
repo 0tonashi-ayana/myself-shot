@@ -25,9 +25,9 @@ def load_emails(email_dir: Path) -> list[dict]:
 
 
 def main() -> int:
-    email_user = os.getenv("EMAIL_USER")
+    email_user = (os.getenv("EMAIL_USER") or "").strip()
     email_pass = os.getenv("EMAIL_PASS")
-    email_to = os.getenv("EMAIL_TO", email_user)
+    email_to = (os.getenv("EMAIL_TO") or email_user).strip()
 
     if not email_user or not email_pass:
         print("EMAIL_USER or EMAIL_PASS is missing; skipping send")
