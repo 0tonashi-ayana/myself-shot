@@ -1,12 +1,12 @@
 {
   "dateOfSleep": "2026-03-31",
   "startTime": "2026-03-31T06:39:30.000",
-  "endTime": "2026-03-31T11:13:30.000",
-  "duration_min": 274,
-  "efficiency": 78,
+  "endTime": "2026-03-31T18:39:00.000",
+  "duration_min": 335,
+  "efficiency": 81,
   "wake_min": 59,
   "light_min": 104,
   "deep_min": 82,
   "rem_min": 28,
-  "session_count": 1
+  "session_count": 2
 }
